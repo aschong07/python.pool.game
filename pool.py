@@ -1,76 +1,70 @@
+#imports
 import pygame
 import math
 
+#pygame is intiated
 pygame.init()
 
-# Game window dimensions
-WIDTH, HEIGHT = 800, 600
+
+#Visuals:
+
+#basic settings
+WIDTH, HEIGHT = 900, 500 # window size
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("2D Pool Game")
+pygame.display.set_caption("2D Pool Game_ECE160") #title of game
+clock = pygame.time.Clock() #creates a clocked controled by FPS
+FPS = 60
 
-# Colors
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-RED = (255, 0, 0)
+#colors im too lazy to pick colors rn sooooo
+table_boarder =  #sets the boarder
+#color of the balls
+green =  
+white =
+red =
+yellow = 
+blue = 
+black = 
 
-# Ball class
-class Ball:
-    def __init__(self, x, y, radius, color, mass=1):
-        self.x = x
-        self.y = y
-        self.radius = radius
-        self.color = color
-        self.vx = 0
-        self.vy = 0
-        self.mass = mass
+#constants
+ball_radius = 12 #balls radius
+friction = 0.99 #slows down the ball
+cue_power_multiplier = 0.12 #controls the strength of the shots
+min_speed = 0.01 #stops the ball completely
 
-    def draw(self, surface):
-        pygame.draw.circle(surface, self.color, (int(self.x), int(self.y)), self.radius)
+#table boundaries
+left_bound = 70
+right_bound = width - 70 
+top_bound = 50 
+bottom = bound = height - 50
 
-    def update(self, dt):
-        # Apply friction
-        friction_factor = 0.98
-        self.vx *= friction_factor
-        self.vy *= friction_factor
+#pockets 
 
-        # Update position
-        self.x += self.vx * dt
-        self.y += self.vy * dt
+pocket_radius = 22 
+POCKETS = [
+    #3 pockets on top
+    (LEFT_BOUND, TOP_BOUND),
+    ((LEFT_BOUND + RIGHT_BOUND) // 2, TOP_BOUND),
+    (RIGHT_BOUND, TOP_BOUND),
+    #3 pockets on bottom
+    (LEFT_BOUND, BOTTOM_BOUND),
+    ((LEFT_BOUND + RIGHT_BOUND) // 2, BOTTOM_BOUND),
+    (RIGHT_BOUND, BOTTOM_BOUND)
+]
 
-        # Basic wall collision (example)
-        if self.x - self.radius < 0 or self.x + self.radius > WIDTH:
-            self.vx *= -1
-        if self.y - self.radius < 0 or self.y + self.radius > HEIGHT:
-            self.vy *= -1
+#the balls
 
-# Game loop
-running = True
-clock = pygame.time.Clock()
-cue_ball = Ball(200, 300, 15, WHITE)
+#the ball itself 
+class Ball: 
+    def __init__(self, x, y, color):
+        self.x = x         #Balls X Position
+        self.y = y         #Balls Y Position
+        self.vx = 0        #Velocity in X direction
+        self.vy = 0        #Velocity in Y direction
+        self.color = color  #Color of ball
+        self.is_cue = is_cue #cue ball
+        self.alive = true #still in game
 
-while running:
-    dt = clock.tick(60) / 1000.0  # Delta time in seconds
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            if event.button == 1: # Left click
-                mouse_x, mouse_y = event.pos
-                dx = cue_ball.x - mouse_x
-                dy = cue_ball.y - mouse_y
-                angle = math.atan2(dy, dx)
-                force = 200 # Example force
-                cue_ball.vx = force * math.cos(angle)
-                cue_ball.vy = force * math.sin(angle)
 
-    # Update game elements
-    cue_ball.update(dt)
 
-    # Drawing
-    screen.fill(BLACK) # Pool table background
-    cue_ball.draw(screen)
 
-    pygame.display.update()
-
-pygame.quit()
