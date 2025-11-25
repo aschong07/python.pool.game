@@ -5,7 +5,6 @@ import math
 #pygame is intiated
 pygame.init()
 
-
 #Visuals:
 
 #basic settings
@@ -33,12 +32,11 @@ min_speed = 0.01 #stops the ball completely
 
 #table boundaries
 left_bound = 70
-right_bound = width - 70 
+right_bound = WIDTH - 70 
 top_bound = 50 
-bottom = bound = height - 50
+BOTTOM_BOUND = HEIGHT - 50
 
 #pockets 
-
 pocket_radius = 22 
 POCKETS = [
     #3 pockets on top
@@ -63,6 +61,11 @@ class Ball:
         self.color = color  #Color of ball
         self.is_cue = is_cue #cue ball
         self.alive = true #still in game
+
+#Table
+
+#
+    
 
 
 
