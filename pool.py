@@ -31,7 +31,7 @@ maroon = (128, 0, 0)
 gray = (128, 128, 128)
 
 #constants
-ball_radius = 12 #balls radius
+ball_radius = 20 #balls radius
 friction = 0.99 #slows down the ball
 cue_power_multiplier = 0.12 #controls the strength of the shots
 min_speed = 0.01 #stops the ball completely
@@ -43,7 +43,7 @@ top_bound = 50
 BOTTOM_BOUND = HEIGHT - 50
 
 #pockets 
-pocket_radius = 22 
+pocket_radius = 60
 POCKETS = [
     #3 pockets on top
     (left_bound, top_bound),
@@ -559,6 +559,13 @@ def run_game(config):
             turn_text += " (Place Cue Ball)"
         text = font.render(turn_text, True, white)
         screen.blit(text, (WIDTH // 2 - text.get_width() // 2, 10))
+
+        # Show Groups if assigned
+        if p1_group:
+            p2_group = "stripes" if p1_group == "solids" else "solids"
+            group_msg = f"{config['p1']}: {p1_group.capitalize()}  |  {config['p2']}: {p2_group.capitalize()}"
+            group_surf = pygame.font.SysFont(None, 24).render(group_msg, True, (200, 200, 200))
+            screen.blit(group_surf, (WIDTH // 2 - group_surf.get_width() // 2, 40))
 
         # Draw Buttons
         btn_menu.draw(screen, font)
