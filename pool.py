@@ -32,7 +32,7 @@ gray = (128, 128, 128)
 
 #constants
 ball_radius = 12 #balls radius
-friction = 0.99 #slows down the ball
+friction = 0.9851 #slows down the ball
 cue_power_multiplier = 0.12 #controls the strength of the shots
 min_speed = 0.01 #stops the ball completely
 
@@ -127,7 +127,7 @@ class Cue:
     def __init__(self, ball):
         self.ball = ball
         self.angle = 0
-        self.power = 0
+        self.power = 50
 
     def update(self, mouse_pos):
         dx = mouse_pos[0] - self.ball.x
@@ -352,6 +352,23 @@ def get_text_input(screen, prompt, font):
             if event.type == pygame.QUIT:
                 pygame.quit()
                 return None
+            #Power Bar
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:
+                    if power_bar_rect.collidepoint(event.pos):
+                        dragging_power = True
+                        mouse_x = event.pos[0]
+                        cue.power = max(10, min(100, (mouse_x - 20)/2))
+                
+                if event.type == pygame.MOUSEBUTTONUP:
+                    if event.button == 1:
+                        dragging_power = False
+
+                if event.type == pygame.MOUSEMOTION:
+                    if dragging_power:
+                        mouse_x = event.pos[0]
+                        cue.power = max(10, min(100, (mouse_x - 20) / 2))
+                
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
                     active = False
@@ -503,9 +520,13 @@ def ai_place_ball(balls):
 
 # Main Game Loop
 def run_game(config):
+    p1_score = 0
+    p2_score = 0
     balls = create_balls()
     cue = Cue(balls[0]) # Attach cue to the cue ball (first in list)
-    
+    power_bar_rect = pygame.Rect(20, HEIGHT - 40, 200, 20)
+    dragging_power = False
+
     # Game State
     player_turn = 1 # 1 or 2
     shot_in_progress = False
@@ -597,7 +618,7 @@ def run_game(config):
                     elif balls[0].vx == 0 and balls[0].vy == 0 and not shot_in_progress:
                         shoot_angle = cue.angle
                         # Use the cue power directly
-                        force = cue.power * cue_power_multiplier
+                        force = (cue.power / 100) * 15
                         balls[0].vx = math.cos(shoot_angle) * force
                         balls[0].vy = math.sin(shoot_angle) * force
                         shot_in_progress = True
@@ -647,7 +668,26 @@ def run_game(config):
             potted = check_pockets(balls)
             if shot_in_progress:
                 potted_this_turn.extend(potted)
-        
+            for p in potted:
+                # Assign group
+                if p1_group is None:
+                    if p == "solid":
+                        p1_group = "solids"
+                    elif p == "stripe":
+                        p1_group = "stripes"
+                #Scoring conditions
+                if p == "solid":
+                    if player_turn == 1:
+                        p1_score += 1
+                    else:
+                        p2_score += 1
+                
+                if p == "stripe":
+                    if player_turn == 1:
+                        p1_score += 1
+                    else:
+                        p2_score += 1
+
         # Check if all balls stopped
         all_stopped = True
         for ball in balls:
@@ -682,8 +722,19 @@ def run_game(config):
             elif potted_8ball:
                 # Game Over Logic (Simplified: You lose if you pot 8-ball early)
                 # For now just reset or quit? Let's just switch turn and maybe print winner in console
+                winner = 3 - player_turn
                 print(f"Player {player_turn} potted the 8-ball!")
-                switch_turn = True
+                print(f"Player {winner} wins!")
+
+                screen.fill(table_boarder)
+                draw_text(screen, f"Player {player_turn} potted the 8-ball", font, red, WIDTH//2, HEIGHT//2 - 20, center = True)
+                draw_text(screen, f"Player {winner} wins!", font, yellow, WIDTH//2, HEIGHT//2 + 20, center=True)
+                pygame.display.update()
+                pygame.time.delay (6000)
+
+                return "MENU"
+
+                #switch_turn = True
             else:
                 # Check if current player potted their own ball
                 my_group = None
@@ -711,6 +762,16 @@ def run_game(config):
         if balls[0].vx == 0 and balls[0].vy == 0 and balls[0].alive and not cue_ball_in_hand and not is_ai_turn and not shot_in_progress:
             cue.update(mouse_pos)
             cue.draw(screen)
+        
+        #Scoreboard
+        score_text = f"{config['p1']}: {p1_score}  |  {config['p2']}:  {p2_score}"
+        score_img = font.render(score_text, True, white)
+        screen.blit(score_img, (WIDTH//2 - score_img.get_width()//2, 45))
+
+        #Power bar
+        pygame.draw.rect(screen, (200,200,200), power_bar_rect, 2)
+        fill_width = int(2 * cue.power)
+        pygame.draw.rect(screen, (255,0,0), (20, HEIGHT - 40, fill_width, 20))
             
         pygame.display.update()
     
