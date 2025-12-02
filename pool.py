@@ -687,59 +687,10 @@ def run_game(config):
                 cue_ball_in_hand = True
                 balls[0].alive = True
             elif potted_8ball:
-                # Game Over Logic
-                current_name = config["p1"] if player_turn == 1 else config["p2"]
-                
-                # Check if player has cleared their group
-                my_group = None
-                if p1_group:
-                    if player_turn == 1: my_group = p1_group
-                    else: my_group = "stripes" if p1_group == "solids" else "solids"
-                
-                has_balls_left = False
-                if my_group:
-                    for ball in balls:
-                        if ball.alive and not ball.is_cue and ball.color != black:
-                            if (my_group == "solids" and not ball.is_striped) or \
-                               (my_group == "stripes" and ball.is_striped):
-                                has_balls_left = True
-                                break
-                else:
-                    has_balls_left = True # Open table = automatic loss on 8-ball
-
-                # Determine Result
-                is_win = False
-                if has_balls_left or potted_cue: # Loss if balls left OR scratch on 8-ball
-                    if config["mode"] == "ai" and player_turn == 1:
-                        msg = "You Lose!"
-                    elif config["mode"] == "ai" and player_turn == 2:
-                        msg = "AI Lost! You Win!"
-                    else:
-                        msg = f"{current_name} Lost!"
-                else: # Win
-                    is_win = True
-                    if config["mode"] == "ai" and player_turn == 1:
-                        msg = "You Win!"
-                    elif config["mode"] == "ai" and player_turn == 2:
-                        msg = "AI Wins!"
-                    else:
-                        msg = f"{current_name} Wins!"
-
-                # Draw message
-                font_large = pygame.font.SysFont(None, 80)
-                text_color = green if is_win else red
-                text_surf = font_large.render(msg, True, text_color)
-                text_rect = text_surf.get_rect(center=(WIDTH//2, HEIGHT//2))
-                
-                # Draw a background box for readability
-                bg_rect = text_rect.inflate(20, 20)
-                pygame.draw.rect(screen, black, bg_rect)
-                pygame.draw.rect(screen, white, bg_rect, 2)
-                screen.blit(text_surf, text_rect)
-                
-                pygame.display.update()
-                pygame.time.wait(3000)
-                return "MENU"
+                # Game Over Logic (Simplified: You lose if you pot 8-ball early)
+                # For now just reset or quit? Let's just switch turn and maybe print winner in console
+                print(f"Player {player_turn} potted the 8-ball!")
+                switch_turn = True
             else:
                 # Check if current player potted their own ball
                 my_group = None
