@@ -29,7 +29,7 @@ purple = (128, 0, 128)
 orange = (255, 165, 0)
 maroon = (128, 0, 0)
 gray = (128, 128, 128)
-light_blue = (173, 216, 230)
+light_blue = (173, 216, 230)  # for prediction lines
 
 #constants
 ball_radius = 12 #balls radius
@@ -43,6 +43,9 @@ right_bound = WIDTH - 70
 top_bound = 50 
 BOTTOM_BOUND = HEIGHT - 50
 
+# headstring (for ball-in-hand behind the line)
+HEADSTRING_X = left_bound + (right_bound - left_bound) // 4
+
 #pockets 
 pocket_radius = 22 
 POCKETS = [
@@ -55,8 +58,6 @@ POCKETS = [
     ((left_bound + right_bound) // 2, BOTTOM_BOUND),
     (right_bound, BOTTOM_BOUND)
 ]
-
-#the balls
 
 #the ball itself 
 class Ball: 
@@ -79,7 +80,7 @@ class Ball:
             pygame.draw.circle(surf, (255, 255, 255), (ball_radius, ball_radius), ball_radius)
             
             # 2. Draw colored stripe (rect)
-            rect_height = ball_radius * 1.2
+            rect_height = int(ball_radius * 1.2)
             rect = pygame.Rect(0, ball_radius - rect_height // 2, ball_radius * 2, rect_height)
             pygame.draw.rect(surf, self.color, rect)
             
@@ -88,7 +89,6 @@ class Ball:
             pygame.draw.circle(mask, (255, 255, 255), (ball_radius, ball_radius), ball_radius)
             
             # 4. Apply mask using BLEND_RGBA_MULT
-            # This keeps pixels where mask is white, and removes where mask is transparent
             surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
             
             screen.blit(surf, (int(self.x) - ball_radius, int(self.y) - ball_radius))
@@ -142,13 +142,10 @@ class Cue:
 
     def draw(self, screen):
         # Draw the cue stick extending away from the ball, opposite to the mouse
-        # The stick pulls back as power increases
         offset = 10 + self.power # Distance from ball to tip of cue
         length = 200 # Length of cue stick
         
-        # We want the cue to be behind the ball, aiming at it.
-        # Angle is Ball -> Mouse.
-        # So we want to draw in the direction of angle + PI (180 degrees)
+        # Cue is behind the ball, aiming at it.
         cue_angle = self.angle + math.pi
         
         start_x = self.ball.x + math.cos(cue_angle) * offset
@@ -157,9 +154,8 @@ class Cue:
         end_x = start_x + math.cos(cue_angle) * length
         end_y = start_y + math.sin(cue_angle) * length
         
-        # Draw a simple line for the cue
         pygame.draw.line(screen, (139, 69, 19), (start_x, start_y), (end_x, end_y), 6)
-    
+
     def draw_prediction(self, screen, balls):
         """
         Simulate the actual shot using the game's physics and draw:
@@ -277,8 +273,8 @@ def check_collisions(balls, cue_ball_in_hand=False, collision_info=None):
 
             if distance < ball_radius * 2:
                 # Collision detected
-                
-                #Track first ball hit by cue ball this turn
+
+                # Track first ball hit by cue ball this turn
                 if collision_info is not None and collision_info.get("first_hit") is None:
                     cue_ball = None
                     other = None
@@ -356,7 +352,7 @@ def check_pockets(balls):
             if dist < pocket_radius:
                 # Ball in pocket
                 if ball.is_cue:
-                    # Move cue ball off screen instead of resetting
+                    # Move cue ball off screen, mark as scratched
                     ball.x = -1000
                     ball.y = -1000
                     ball.vx = 0
@@ -395,16 +391,11 @@ def create_balls():
     for c in colors:
         object_balls.append({'color': c, 'striped': True})
         
-    # Simple shuffle by alternating or just using the list as is (it's mixed enough for now)
-    # Or we can just pop from it.
-    # Let's interleave them to mix solids and stripes
+    # Interleave solids and stripes
     mixed_balls = []
     for i in range(7):
         mixed_balls.append(object_balls[i]) # Solid
         mixed_balls.append(object_balls[i+7]) # Stripe
-    
-    # We need to assign them to positions.
-    # Position (2, 1) is the 8-ball (Black, Solid).
     
     ball_idx = 0
     for col in range(rows):
@@ -479,23 +470,7 @@ def get_text_input(screen, prompt, font):
             if event.type == pygame.QUIT:
                 pygame.quit()
                 return None
-            #Power Bar
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1:
-                    if power_bar_rect.collidepoint(event.pos):
-                        dragging_power = True
-                        mouse_x = event.pos[0]
-                        cue.power = max(10, min(100, (mouse_x - 20)/2))
-                
-                if event.type == pygame.MOUSEBUTTONUP:
-                    if event.button == 1:
-                        dragging_power = False
-
-                if event.type == pygame.MOUSEMOTION:
-                    if dragging_power:
-                        mouse_x = event.pos[0]
-                        cue.power = max(10, min(100, (mouse_x - 20) / 2))
-                
+            
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
                     active = False
@@ -562,14 +537,12 @@ def get_ai_shot(balls, difficulty, my_group):
     # Filter targets based on group
     valid_targets = []
     for b in balls[1:]:
-        if not b.alive: continue
+        if not b.alive: 
+            continue
         
         is_8ball = (b.color == black)
         if is_8ball:
-            # Only target 8-ball if group is cleared (or if open table and no other choice? No, 8-ball is last)
-            # For simplicity, AI only targets 8-ball if it's the only thing left for them
-            # But we need to know if group is cleared.
-            # Let's count remaining balls for my_group
+            # Only target 8-ball if group is cleared (simplified)
             pass
         else:
             is_stripe = b.is_striped
@@ -628,8 +601,11 @@ def get_ai_shot(balls, difficulty, my_group):
     return angle, power
 
 def ai_place_ball(balls):
+    """
+    Place cue ball behind the headstring for AI when it has ball in hand.
+    """
     while True:
-        x = random.randint(left_bound + ball_radius, right_bound - ball_radius)
+        x = random.randint(left_bound + ball_radius, int(HEADSTRING_X - ball_radius))
         y = random.randint(top_bound + ball_radius, BOTTOM_BOUND - ball_radius)
         valid = True
         for ball in balls[1:]:
@@ -652,7 +628,7 @@ def run_game(config):
     balls = create_balls()
     cue = Cue(balls[0]) # Attach cue to the cue ball (first in list)
     power_bar_rect = pygame.Rect(20, HEIGHT - 40, 200, 20)
-    dragging_power = False
+    dragging_power = False  # (not used now, but kept if you want slider later)
 
     # Game State
     player_turn = 1 # 1 or 2
@@ -664,7 +640,7 @@ def run_game(config):
     
     # Track first ball hit by cue ball each turn
     first_hit_info = {"first_hit": None, "hit_pos": None, "hit_ball_index": None}
-
+    
     # Font for text
     font = pygame.font.SysFont(None, 36)
     
@@ -731,10 +707,8 @@ def run_game(config):
                         continue
 
                     if cue_ball_in_hand:
-                        # Try to place ball
-                        # Check if valid placement (not colliding with others)
+                        # Try to place ball - position already follows mouse
                         can_place = True
-                        # Check collision with other balls
                         for ball in balls[1:]: # Skip cue ball
                             if ball.alive:
                                 dist = math.hypot(balls[0].x - ball.x, balls[0].y - ball.y)
@@ -753,6 +727,9 @@ def run_game(config):
                         balls[0].vy = math.sin(shoot_angle) * force
                         shot_in_progress = True
                         potted_this_turn = [] # Reset potted balls for this shot
+                        first_hit_info["first_hit"] = None
+                        first_hit_info["hit_pos"] = None
+                        first_hit_info["hit_ball_index"] = None
                 
         mouse_pos = pygame.mouse.get_pos()
         
@@ -788,14 +765,16 @@ def run_game(config):
                         ai_timer = 0
         
         if cue_ball_in_hand and not is_ai_turn:
-            # Move cue ball with mouse
-            balls[0].x = max(left_bound + ball_radius, min(mouse_pos[0], right_bound - ball_radius))
+            # Move cue ball with mouse, but restrict behind headstring (Option 2)
+            min_x = left_bound + ball_radius
+            max_x = HEADSTRING_X - ball_radius
+            balls[0].x = max(min_x, min(mouse_pos[0], max_x))
             balls[0].y = max(top_bound + ball_radius, min(mouse_pos[1], BOTTOM_BOUND - ball_radius))
             balls[0].vx = 0
             balls[0].vy = 0
         
         # Physics Updates
-        check_collisions(balls, cue_ball_in_hand)
+        check_collisions(balls, cue_ball_in_hand, first_hit_info)
         
         if not cue_ball_in_hand:
             potted = check_pockets(balls)
@@ -830,7 +809,6 @@ def run_game(config):
         
         if shot_in_progress and all_stopped:
             shot_in_progress = False
-            # Turn Logic
             
             # Analyze potted balls
             potted_cue = "cue" in potted_this_turn
@@ -838,7 +816,7 @@ def run_game(config):
             potted_stripes = [x for x in potted_this_turn if x == "stripe"]
             potted_solids = [x for x in potted_this_turn if x == "solid"]
             
-            # Assign Groups if Open Table
+            # Assign Groups if Open Table (no scratch / 8-ball)
             if p1_group is None and not potted_cue and not potted_8ball:
                 if potted_solids and not potted_stripes:
                     p1_group = "solids" if player_turn == 1 else "stripes"
@@ -849,12 +827,12 @@ def run_game(config):
             switch_turn = True
             
             if potted_cue:
+                # Scratch: cue-ball-in-hand for opponent
                 switch_turn = True
                 cue_ball_in_hand = True
                 balls[0].alive = True
             elif potted_8ball:
-                # Game Over Logic (Simplified: You lose if you pot 8-ball early)
-                # For now just reset or quit? Let's just switch turn and maybe print winner in console
+                # 8-ball potted: current player loses (simplified)
                 winner = 3 - player_turn
                 print(f"Player {player_turn} potted the 8-ball!")
                 print(f"Player {winner} wins!")
@@ -863,17 +841,17 @@ def run_game(config):
                 draw_text(screen, f"Player {player_turn} potted the 8-ball", font, red, WIDTH//2, HEIGHT//2 - 20, center = True)
                 draw_text(screen, f"Player {winner} wins!", font, yellow, WIDTH//2, HEIGHT//2 + 20, center=True)
                 pygame.display.update()
-                pygame.time.delay (6000)
+                pygame.time.delay(6000)
 
                 return "MENU"
-
-                #switch_turn = True
             else:
-                # Check if current player potted their own ball
+                # Check groups and fouls
                 my_group = None
                 if p1_group:
-                    if player_turn == 1: my_group = p1_group
-                    else: my_group = "stripes" if p1_group == "solids" else "solids"
+                    if player_turn == 1:
+                        my_group = p1_group
+                    else:
+                        my_group = "stripes" if p1_group == "solids" else "solids"
                 
                 foul_no_own_first = False
                 if p1_group is not None and my_group is not None:
@@ -901,7 +879,7 @@ def run_game(config):
                     else: # Open Table
                         if potted_solids or potted_stripes:
                             switch_turn = False
-                
+            
             if switch_turn:
                 player_turn = 3 - player_turn
             
@@ -911,7 +889,7 @@ def run_game(config):
                 ball.move()
                 ball.draw(screen)
             
-        # Update and Draw Cue if cue ball is stopped
+        # Update and Draw Cue + Prediction line if cue ball is stopped
         if balls[0].vx == 0 and balls[0].vy == 0 and balls[0].alive and not cue_ball_in_hand and not is_ai_turn and not shot_in_progress:
             cue.update(mouse_pos)
             cue.draw(screen)
@@ -945,4 +923,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
