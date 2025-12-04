@@ -6,9 +6,6 @@ import random  # for randomizing ball placement and ai behavior
 # pygame is initiated - start up pygame system
 pygame.init()
 
-# optional: initialize sound mixer for victory sound
-pygame.mixer.init()  # sets up audio system for sound effects
-
 # visuals:
 
 # basic settings
@@ -46,7 +43,7 @@ top_bound = 50  # top edge of playable area
 BOTTOM_BOUND = HEIGHT - 50  # bottom edge of playable area
 
 # pockets - locations where balls can be potted
-pocket_radius = 60  # how big each pocket is
+pocket_radius = 30  # how big each pocket is
 POCKETS = [  # list of all pocket positions (x, y)
     # 3 pockets on top row
     (left_bound, top_bound),  # top left corner
@@ -494,6 +491,9 @@ def menu():  # displays main menu and gets player choices
                     return {"mode": "ai", "difficulty": "hard", "p1": "You", "p2": "Hard AI"}  # return hard config
         
         pygame.display.flip()  # update display
+
+
+#ai's shots
 
 def get_ai_shot(balls, difficulty, my_group):  # calculates ai shot angle and power
     cue_ball = balls[0]  # get reference to cue ball
