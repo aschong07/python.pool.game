@@ -199,7 +199,7 @@ class Cue:
     
     def calculate_velocity(self):  # calculates ball velocity based on current power
         force = (self.power / 100) * 15  # convert power percentage to force value
-        vx = math.cos(self.angle) * force  # horizontal component of velocity
+        vx = math.cos(self.angle) * force  # horizontal component of velociy
         vy = math.sin(self.angle) * force  # vertical component of velocity
         return vx, vy  # return both components
 
@@ -237,7 +237,7 @@ class Cue:
             screen.blit(text, (self.ball.x + 20, self.ball.y + 20))  # draw power text near ball
 
     def draw_prediction(self, screen, balls):  # placeholder for trajectory prediction
-        pass  # not implemented yet
+        pass 
 
 def check_collisions(balls, cue_ball_in_hand=False):  # checks for collisions between all balls
     for i in range(len(balls)):  # loop through each ball
@@ -783,11 +783,11 @@ def run_game(config):  # main game function
             screen.blit(group_surf, (WIDTH // 2 - group_surf.get_width() // 2, 40))  # draw below turn indicator
 
         # draw buttons
-        btn_menu.draw(screen, font)  # draw menu button
+        btn_menu.draw(screen, font)  # draw menu buttn 
         btn_quit.draw(screen, font)  # draw quit button
 
-        for event in pygame.event.get():  # check for events
-            if event.type == pygame.QUIT:  # if closing window
+        for event in pygame.event.get():  # check for evnets
+            if event.type == pygame.QUIT:  # if closing windows
                 return "QUIT"  # return quit command
             
             if btn_menu.is_clicked(event):  # if menu button clicked

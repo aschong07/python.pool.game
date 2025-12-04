@@ -32,6 +32,7 @@ purple = (128, 0, 128)
 orange = (255, 165, 0)
 maroon = (128, 0, 0)
 gray = (128, 128, 128)
+light_blue = (173, 216, 230)  # for prediction lines
 
 #constants
 ball_radius = 20 #balls radius
@@ -241,8 +242,103 @@ class Cue:
             screen.blit(text, (self.ball.x + 20, self.ball.y + 20))
 
     def draw_prediction(self, screen, balls):
-        pass
-def check_collisions(balls, cue_ball_in_hand=False):
+        """
+        simulate the actual shot using the game's physics and draw:
+        - a line from the real cue ball to the collision point (or stop point)
+        - a line from the struck object ball from collision to where it rolls to
+        """
+        cue_ball = self.ball
+        if not cue_ball.alive:
+            return
+
+        # ---Clone balls so we don't touch the real game sate ---
+        sim_balls = []
+        for b in balls:
+            nb = Ball(b.x, b.y, b.color, b.is_cue, b.is_striped)
+            nb.vx = b.vx
+            nb.vy = b.vy
+            nb.alive = b.alive
+            sim_balls.append(nb)
+
+        sim_cue = sim_balls[0]
+
+        # same shot force as in the real game (human shot)
+        force = (self.power / 100) * 15
+        sim_cue.vx = math.cos(self.angle) * force
+        sim_cue.vy = math.sin(self.angle) * force
+
+        # real starting point (where to start the line from)
+        real_start_x = cue_ball.x
+        real_start_y = cue_ball.y
+
+        collision_point = None
+        obj_start_pos = None
+        obj_final_pos = None
+        hit_index = None
+
+        max_steps = 250  # number of "frames" to simulate
+
+        for _ in range(max_steps):
+            # collision check (same as game, but on the sim copy)
+            sim_collision_info = {
+                "first_hit": None,
+                "hit_pos": None,
+                "hit_ball_index": None
+            }
+            check_collisions(sim_balls, cue_ball_in_hand=False, collision_info=sim_collision_info)
+
+            # if we haven't recorded a collision yet, see if this frame has one
+            if collision_point is None and sim_collision_info["hit_pos"] is not None:
+                collision_point = sim_collision_info["hit_pos"]
+                hit_index = sim_collision_info["hit_ball_index"]
+                if hit_index is not None:
+                    # object ball position at the moment of first contact
+                    obj_start_pos = (sim_balls[hit_index].x, sim_balls[hit_index].y)
+
+            # move all simulated balls (same physics as game)
+            for sb in sim_balls:
+                if sb.alive:
+                    sb.move()
+
+            # if we already know which object ball was hit, track its motion
+            if hit_index is not None:
+                obj_ball = sim_balls[hit_index]
+                obj_final_pos = (obj_ball.x, obj_ball.y)
+
+                # stop tracking when that ball basically stops or is pocketed
+                if (abs(obj_ball.vx) < min_speed and abs(obj_ball.vy) < min_speed) or (not obj_ball.alive):
+                    break
+            else:
+                # no collision yet: stop if cue ball basically stops
+                if abs(sim_cue.vx) < min_speed and abs(sim_cue.vy) < min_speed:
+                    break
+
+        # --------- draw lines ---------
+
+        # 1) cue ball path: from real cue ball to collision or stop point
+        if collision_point is not None:
+            cue_end_x, cue_end_y = collision_point
+        else:
+            cue_end_x, cue_end_y = sim_cue.x, sim_cue.y
+
+        pygame.draw.line(
+            screen,
+            light_blue,
+            (real_start_x, real_start_y),
+            (cue_end_x, cue_end_y),
+            2
+        )
+
+        # 2) object ball path (second segment)
+        if obj_start_pos is not None and obj_final_pos is not None:
+            pygame.draw.line(
+                screen,
+                light_blue,
+                obj_start_pos,
+                obj_final_pos,
+                2
+            )
+def check_collisions(balls, cue_ball_in_hand=False, collision_info=None):
     for i in range(len(balls)):
         # If cue ball is in hand, skip checking it against other balls
         if cue_ball_in_hand and i == 0:
@@ -261,6 +357,34 @@ def check_collisions(balls, cue_ball_in_hand=False):
 
             if distance < ball_radius * 2:
                 # Collision detected
+                
+                # track first ball hit by cue ball this turn
+                if collision_info is not None and collision_info.get("first_hit") is None:
+                    cue_ball = None
+                    other = None
+                    hit_index = None
+
+                    if b1.is_cue and not cue_ball_in_hand:
+                        cue_ball = b1
+                        other = b2
+                        hit_index = j
+                    elif b2.is_cue and not cue_ball_in_hand:
+                        cue_ball = b2
+                        other = b1
+                        hit_index = i
+
+                    if cue_ball is not None and other is not None and other.alive:
+                        # what type of ball was hit first?
+                        if other.color == black:
+                            collision_info["first_hit"] = "8ball"
+                        elif other.is_striped:
+                            collision_info["first_hit"] = "stripes"
+                        else:
+                            collision_info["first_hit"] = "solids"
+
+                        # extra info for prediction line
+                        collision_info["hit_pos"] = (cue_ball.x, cue_ball.y)
+                        collision_info["hit_ball_index"] = hit_index
                 
                 # Resolve overlap
                 overlap = ball_radius * 2 - distance
@@ -621,6 +745,67 @@ def check_win_condition(balls, player_group):
     
     return True  # All conditions met!
 
+def show_lose_screen(screen, loser_name):
+    """display lose screen for the player who lost
+    
+    args:
+        screen: pygame display surface
+        loser_name: name of the player who lost
+    
+    returns:
+        string indicating next action ("menu" or "quit")
+    """
+    clock = pygame.time.Clock()
+    
+    # lose screen loop
+    showing_lose_screen = True
+    
+    while showing_lose_screen:
+        clock.tick(FPS)
+        
+        # handle events
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "QUIT"
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE or event.key == pygame.K_RETURN:
+                    return "MENU"  # return to menu on esc or enter
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                return "MENU"  # click to return to menu
+        
+        # draw background (semi-transparent overlay)
+        overlay = pygame.Surface((WIDTH, HEIGHT))
+        overlay.set_alpha(200)
+        overlay.fill((0, 0, 0))
+        screen.blit(overlay, (0, 0))
+        
+        # draw "you lose!" message
+        lose_font = pygame.font.SysFont(None, 120)
+        lose_text = lose_font.render("YOU LOSE!", True, (220, 20, 60))  # crimson color
+        lose_rect = lose_text.get_rect(center=(WIDTH // 2, HEIGHT // 3))
+        
+        # draw shadow for text
+        shadow_text = lose_font.render("YOU LOSE!", True, (0, 0, 0))
+        shadow_rect = shadow_text.get_rect(center=(WIDTH // 2 + 5, HEIGHT // 3 + 5))
+        screen.blit(shadow_text, shadow_rect)
+        screen.blit(lose_text, lose_rect)
+        
+        # draw loser name
+        name_font = pygame.font.SysFont(None, 60)
+        name_text = name_font.render(f"{loser_name} lost!", True, (255, 255, 255))
+        name_rect = name_text.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+        screen.blit(name_text, name_rect)
+        
+        # draw instruction text
+        instruction_font = pygame.font.SysFont(None, 36)
+        instruction_text = instruction_font.render("Click or press ENTER to return to menu", True, (200, 200, 200))
+        instruction_rect = instruction_text.get_rect(center=(WIDTH // 2, HEIGHT * 2 // 3))
+        screen.blit(instruction_text, instruction_rect)
+        
+        pygame.display.update()
+    
+    return "MENU"
+
 def show_win_screen(screen, winner_name, confetti_particles):
     """
     Display the win screen with confetti animation
@@ -905,19 +1090,20 @@ def run_game(config):
                     else:
                         current_player_group = "stripes" if p1_group == "solids" else "solids"
                 
-                # Check win condition
+                # check win condition
                 if current_player_group and check_win_condition(balls, current_player_group):
-                    # PLAYER WINS!
+                    # player wins!
                     winner_name = config["p1"] if player_turn == 1 else config["p2"]
+                    
+                    # show win screen for winner
                     result = show_win_screen(screen, winner_name, confetti_particles)
                     return result
                 else:
-                    # Potted 8-ball too early - player loses
-                    # The other player wins
-                    loser_turn = player_turn
-                    winner_turn = 3 - player_turn
-                    winner_name = config["p1"] if winner_turn == 1 else config["p2"]
-                    result = show_win_screen(screen, winner_name, confetti_particles)
+                    # potted 8-ball too early - current player loses
+                    loser_name = config["p1"] if player_turn == 1 else config["p2"]
+                    
+                    # show lose screen for the player who made the mistake
+                    result = show_lose_screen(screen, loser_name)
                     return result
             else:
                 # Check if current player potted their own ball
