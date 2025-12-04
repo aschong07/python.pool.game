@@ -1082,6 +1082,12 @@ def run_game(config):
                 cue_ball_in_hand = True
                 balls[0].alive = True
             elif potted_8ball:
+                # check if cue ball and 8-ball were potted together - automatic loss
+                if potted_cue:
+                    loser_name = config["p1"] if player_turn == 1 else config["p2"]
+                    result = show_lose_screen(screen, loser_name)
+                    return result
+                
                 # Check if this is a legitimate win (all player's balls cleared)
                 current_player_group = None
                 if p1_group:
