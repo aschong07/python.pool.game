@@ -239,100 +239,112 @@ class Cue:
             screen.blit(text, (self.ball.x + 20, self.ball.y + 20))
 
     def draw_prediction(self, screen, balls):
-        # simulate the actual shot using the game's physics and draw:
-        # - a line from the real cue ball to the collision point (or stop point)
-        # - a line from the struck object ball from collision to where it rolls to
+        """
+        Draw a prediction:
+        - A light blue line showing where the cue ball will travel
+        - A second line showing the approximate direction the first object ball will go
+        This uses simple geometry, not a heavy physics simulation.
+        """
         cue_ball = self.ball
-        if not cue_ball.alive:
+        if not cue_ball.alive or self.power <= 0:
             return
 
-        # ---Clone balls so we don't touch the real game sate ---
-        sim_balls = []
-        for b in balls:
-            nb = Ball(b.x, b.y, b.color, b.is_cue, b.is_striped)
-            nb.vx = b.vx
-            nb.vy = b.vy
-            nb.alive = b.alive
-            sim_balls.append(nb)
+        start_x = cue_ball.x
+        start_y = cue_ball.y
 
-        sim_cue = sim_balls[0]
+        # Unit direction vector of the shot
+        dir_x = math.cos(self.angle)
+        dir_y = math.sin(self.angle)
 
-        # same shot force as in the real game (human shot)
-        force = (self.power / 100) * 15
-        sim_cue.vx = math.cos(self.angle) * force
-        sim_cue.vy = math.sin(self.angle) * force
+        max_length = 800  # how far to draw if no ball is hit
 
-        # real starting point (where to start the line from)
-        real_start_x = cue_ball.x
-        real_start_y = cue_ball.y
+        hit_t = None
+        hit_ball = None
 
-        collision_point = None
-        obj_start_pos = None
-        obj_final_pos = None
-        hit_index = None
+        # Find the earliest collision between the cue path and any other ball
+        for b in balls[1:]:  # skip the cue ball itself (index 0)
+            if not b.alive:
+                continue
 
-        max_steps = 250  # number of "frames" to simulate
+            # Vector from cue start to this ball center
+            cx = b.x - start_x
+            cy = b.y - start_y
 
-        for _ in range(max_steps):
-            # collision check (same as game, but on the sim copy)
-            sim_collision_info = {
-                "first_hit": None,
-                "hit_pos": None,
-                "hit_ball_index": None
-            }
-            check_collisions(sim_balls, cue_ball_in_hand=False, collision_info=sim_collision_info)
+            # Projection of that vector onto the shot direction
+            proj = cx * dir_x + cy * dir_y
+            if proj <= 0:
+                # Ball is behind the cue direction, ignore
+                continue
 
-            # if we haven't recorded a collision yet, see if this frame has one
-            if collision_point is None and sim_collision_info["hit_pos"] is not None:
-                collision_point = sim_collision_info["hit_pos"]
-                hit_index = sim_collision_info["hit_ball_index"]
-                if hit_index is not None:
-                    # object ball position at the moment of first contact
-                    obj_start_pos = (sim_balls[hit_index].x, sim_balls[hit_index].y)
+            # Closest point on the shot line to the ball center
+            closest_x = proj * dir_x
+            closest_y = proj * dir_y
 
-            # move all simulated balls (same physics as game)
-            for sb in sim_balls:
-                if sb.alive:
-                    sb.move()
+            # Perpendicular distance from line to ball center
+            perp_x = cx - closest_x
+            perp_y = cy - closest_y
+            dist_perp_sq = perp_x * perp_x + perp_y * perp_y
 
-            # if we already know which object ball was hit, track its motion
-            if hit_index is not None:
-                obj_ball = sim_balls[hit_index]
-                obj_final_pos = (obj_ball.x, obj_ball.y)
+            # Collision radius = 2 * ball_radius (center-to-center distance)
+            radius_sum = ball_radius * 2
+            if dist_perp_sq > radius_sum * radius_sum:
+                # Shot line misses this ball
+                continue
 
-                # stop tracking when that ball basically stops or is pocketed
-                if (abs(obj_ball.vx) < min_speed and abs(obj_ball.vy) < min_speed) or (not obj_ball.alive):
-                    break
-            else:
-                # no collision yet: stop if cue ball basically stops
-                if abs(sim_cue.vx) < min_speed and abs(sim_cue.vy) < min_speed:
-                    break
+            # We have an intersection; solve for the entry point along the line
+            # proj is distance from start to closest point; offset is how far back to collision
+            offset = math.sqrt(radius_sum * radius_sum - dist_perp_sq)
+            t = proj - offset
+            if t < 0:
+                t = proj  # fallback, shouldn't really happen
 
-        # --------- draw lines ---------
+            if hit_t is None or t < hit_t:
+                hit_t = t
+                hit_ball = b
 
-        # 1) cue ball path: from real cue ball to collision or stop point
-        if collision_point is not None:
-            cue_end_x, cue_end_y = collision_point
+        # Compute end of cue prediction line
+        if hit_t is not None and hit_t < max_length:
+            end_x = start_x + dir_x * hit_t
+            end_y = start_y + dir_y * hit_t
         else:
-            cue_end_x, cue_end_y = sim_cue.x, sim_cue.y
+            # No collision; just draw a long line
+            end_x = start_x + dir_x * max_length
+            end_y = start_y + dir_y * max_length
 
+        # 1) Draw cue ball path prediction
         pygame.draw.line(
             screen,
             light_blue,
-            (real_start_x, real_start_y),
-            (cue_end_x, cue_end_y),
-            2
+            (start_x, start_y),
+            (end_x, end_y),
+            2,
         )
 
-        # 2) object ball path (second segment)
-        if obj_start_pos is not None and obj_final_pos is not None:
-            pygame.draw.line(
-                screen,
-                light_blue,
-                obj_start_pos,
-                obj_final_pos,
-                2
-            )
+        # 2) If we hit a ball, draw its approximate outgoing direction
+        if hit_ball is not None:
+            # Collision point is (end_x, end_y)
+            # Normal from collision point to ball center
+            nx = hit_ball.x - end_x
+            ny = hit_ball.y - end_y
+            n_len = math.hypot(nx, ny)
+            if n_len != 0:
+                nx /= n_len
+                ny /= n_len
+
+                obj_start_x = hit_ball.x
+                obj_start_y = hit_ball.y
+                obj_end_x = obj_start_x + nx * 200
+                obj_end_y = obj_start_y + ny * 200
+
+                pygame.draw.line(
+                    screen,
+                    light_blue,
+                    (obj_start_x, obj_start_y),
+                    (obj_end_x, obj_end_y),
+                    2,
+                )
+
+
 def check_collisions(balls, cue_ball_in_hand=False, collision_info=None):
     for i in range(len(balls)):
         # If cue ball is in hand, skip checking it against other balls
@@ -1169,6 +1181,7 @@ def run_game(config):
         if balls[0].vx == 0 and balls[0].vy == 0 and balls[0].alive and not cue_ball_in_hand and not is_ai_turn and not shot_in_progress:
             cue.update(mouse_pos)
             cue.draw(screen)
+            cue.draw_prediction(screen, balls)
         
         # Update strike animation
         if cue.is_striking:
