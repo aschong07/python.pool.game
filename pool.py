@@ -5,8 +5,6 @@ import random
 
 #pygame is intiated
 pygame.init()
-
-# Optional: Initialize sound mixer for victory sound
 pygame.mixer.init()
 
 #Visuals:
@@ -93,13 +91,12 @@ class Confetti:
         self.vy += 0.1
         
     def draw(self, screen):
-        """Draw the confetti piece"""
-        #confetti drawing
         pygame.draw.circle(screen, self.color, (int(self.x), int(self.y)), self.size)
         
     def is_offscreen(self):
-        """Check if confetti has fallen off screen"""
-        return self.y > HEIGHT + 20
+        if self.y > HEIGHT + 20:
+            return True
+        return False
 
 #th balls
 
@@ -242,11 +239,9 @@ class Cue:
             screen.blit(text, (self.ball.x + 20, self.ball.y + 20))
 
     def draw_prediction(self, screen, balls):
-        """
-        simulate the actual shot using the game's physics and draw:
-        - a line from the real cue ball to the collision point (or stop point)
-        - a line from the struck object ball from collision to where it rolls to
-        """
+        # simulate the actual shot using the game's physics and draw:
+        # - a line from the real cue ball to the collision point (or stop point)
+        # - a line from the struck object ball from collision to where it rolls to
         cue_ball = self.ball
         if not cue_ball.alive:
             return
@@ -709,17 +704,7 @@ def ai_place_ball(balls):
             return
 
 def check_win_condition(balls, player_group):
-    """
-    Check if the player has won the game
-    Win condition: All player's balls are pocketed AND the 8-ball is pocketed
     
-    Args:
-        balls: List of all balls in the game
-        player_group: "solids" or "stripes" - the player's assigned group
-    
-    Returns:
-        True if player has won, False otherwise
-    """
     if player_group is None:
         return False  # Can't win without an assigned group
     
@@ -746,15 +731,8 @@ def check_win_condition(balls, player_group):
     return True  # All conditions met!
 
 def show_lose_screen(screen, loser_name):
-    """display lose screen for the player who lost
+    # display lose screen for the player who lost
     
-    args:
-        screen: pygame display surface
-        loser_name: name of the player who lost
-    
-    returns:
-        string indicating next action ("menu" or "quit")
-    """
     clock = pygame.time.Clock()
     
     # lose screen loop
@@ -807,17 +785,8 @@ def show_lose_screen(screen, loser_name):
     return "MENU"
 
 def show_win_screen(screen, winner_name, confetti_particles):
-    """
-    Display the win screen with confetti animation
+    # Display the win screen with confetti animation
     
-    Args:
-        screen: Pygame screen surface
-        winner_name: Name of the winning player
-        confetti_particles: List of confetti objects to animate
-    
-    Returns:
-        String indicating next action ("MENU" or "QUIT")
-    """
     clock = pygame.time.Clock()
     
     # Try to load/play victory sound (optional)
@@ -911,6 +880,14 @@ def run_game(config):
     # Group Assignments
     p1_group = None # "solids" or "stripes"
     
+    # Score tracking
+    p1_score = 0
+    p2_score = 0
+    
+    # Power bar
+    power_bar_rect = pygame.Rect(20, HEIGHT - 40, 200, 20)
+    dragging_power = False
+    
     # Win screen state
     confetti_particles = []  # List to hold confetti objects
     
@@ -966,6 +943,11 @@ def run_game(config):
             group_msg = f"{config['p1']}: {p1_group.capitalize()}  |  {config['p2']}: {p2_group.capitalize()}"
             group_surf = pygame.font.SysFont(None, 24).render(group_msg, True, (200, 200, 200))
             screen.blit(group_surf, (WIDTH // 2 - group_surf.get_width() // 2, 40))
+        
+        # Scoreboard
+        score_text = f"{config['p1']}: {p1_score}  |  {config['p2']}: {p2_score}"
+        score_img = font.render(score_text, True, white)
+        screen.blit(score_img, (WIDTH // 2 - score_img.get_width() // 2, 45))
 
         # Draw Buttons
         btn_menu.draw(screen, font)
@@ -985,6 +967,13 @@ def run_game(config):
                     # Prevent shooting if clicking buttons
                     if btn_menu.rect.collidepoint(event.pos) or btn_quit.rect.collidepoint(event.pos):
                         continue
+                    
+                    # Power bar dragging
+                    if event.button == 1:
+                        if power_bar_rect.collidepoint(event.pos):
+                            dragging_power = True
+                            mouse_x = event.pos[0]
+                            cue.power = max(10, min(100, (mouse_x - 20) / 2))
 
                     if cue_ball_in_hand:
                         # Try to place ball
@@ -1005,6 +994,15 @@ def run_game(config):
                         # Start strike animation
                         cue.start_strike()
                 
+                if event.type == pygame.MOUSEBUTTONUP:
+                    if event.button == 1:
+                        dragging_power = False
+                
+                if event.type == pygame.MOUSEMOTION:
+                    if dragging_power:
+                        mouse_x = event.pos[0]
+                        cue.power = max(10, min(100, (mouse_x - 20) / 2))
+        
         mouse_pos = pygame.mouse.get_pos()
         
         # AI Logic
@@ -1074,6 +1072,20 @@ def run_game(config):
                 elif potted_stripes and not potted_solids:
                     p1_group = "stripes" if player_turn == 1 else "solids"
             
+            # Scoring conditions
+            for p in potted_this_turn:
+                if p == "solid":
+                    if player_turn == 1:
+                        p1_score += 1
+                    else:
+                        p2_score += 1
+                
+                if p == "stripe":
+                    if player_turn == 1:
+                        p1_score += 1
+                    else:
+                        p2_score += 1
+            
             # Determine if turn should switch
             switch_turn = True
             
@@ -1082,6 +1094,22 @@ def run_game(config):
                 cue_ball_in_hand = True
                 balls[0].alive = True
             elif potted_8ball:
+                # check if cue ball and 8-ball were potted together - automatic loss
+                if potted_cue:
+                    loser_name = config["p1"] if player_turn == 1 else config["p2"]
+                    winner = 3 - player_turn
+                    winner_name = config["p1"] if winner == 1 else config["p2"]
+                    
+                    # Show brief game over message
+                    screen.fill(table_boarder)
+                    draw_text(screen, f"{loser_name} potted the cue ball with the 8-ball!", font, red, WIDTH // 2, HEIGHT // 2 - 20, center=True)
+                    draw_text(screen, f"{winner_name} wins!", font, yellow, WIDTH // 2, HEIGHT // 2 + 20, center=True)
+                    pygame.display.update()
+                    pygame.time.delay(3000)
+                    
+                    result = show_lose_screen(screen, loser_name)
+                    return result
+                
                 # Check if this is a legitimate win (all player's balls cleared)
                 current_player_group = None
                 if p1_group:
@@ -1101,6 +1129,15 @@ def run_game(config):
                 else:
                     # potted 8-ball too early - current player loses
                     loser_name = config["p1"] if player_turn == 1 else config["p2"]
+                    winner = 3 - player_turn
+                    winner_name = config["p1"] if winner == 1 else config["p2"]
+                    
+                    # Show brief game over message
+                    screen.fill(table_boarder)
+                    draw_text(screen, f"{loser_name} potted the 8-ball too early!", font, red, WIDTH // 2, HEIGHT // 2 - 20, center=True)
+                    draw_text(screen, f"{winner_name} wins!", font, yellow, WIDTH // 2, HEIGHT // 2 + 20, center=True)
+                    pygame.display.update()
+                    pygame.time.delay(3000)
                     
                     # show lose screen for the player who made the mistake
                     result = show_lose_screen(screen, loser_name)
@@ -1143,7 +1180,12 @@ def run_game(config):
                 balls[0].vy = vy
                 shot_in_progress = True
                 potted_this_turn = []
-            
+        
+        # Power bar
+        pygame.draw.rect(screen, (200, 200, 200), power_bar_rect, 2)
+        fill_width = int(2 * cue.power)
+        pygame.draw.rect(screen, (255, 0, 0), (20, HEIGHT - 40, fill_width, 20))
+        
         pygame.display.update()
     
     return "MENU"
