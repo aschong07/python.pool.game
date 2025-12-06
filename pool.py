@@ -5,6 +5,8 @@ import random
 
 #pygame is intiated
 pygame.init()
+
+# Optional: Initialize sound mixer for victory sound
 pygame.mixer.init()
 
 #Visuals:
@@ -57,157 +59,163 @@ POCKETS = [
     (right_bound, BOTTOM_BOUND)
 ]
 
-#confetti class for winner
+# confetti for when someone wins
 class Confetti:
     def __init__(self, x, y):
         self.x = x
         self.y = y
-        #random horizontal speed
-        self.vx = random.uniform(-2, 2)
-        #randome falling speed
-        self.vy = random.uniform(1, 4)
-        #random colors
+        self.vx = random.uniform(-2, 2)  # speed going left/right
+        self.vy = random.uniform(1, 4)   # speed going down
+        # pick a random color
         self.color = random.choice([
-            (255, 0, 0),    # Red
-            (255, 255, 0),  # Yellow
-            (0, 255, 0),    # Green
-            (0, 255, 255),  # Cyan
-            (255, 0, 255),  # Magenta
-            (255, 165, 0),  # Orange
-            (128, 0, 128)   # Purple
+            (255, 0, 0),
+            (255, 255, 0),
+            (0, 255, 0),
+            (0, 255, 255),
+            (255, 0, 255),
+            (255, 165, 0),
+            (128, 0, 128)
         ])
-        #random sizeing
-        self.size = random.randint(3, 8)
-        #random rotation
+        self.size = random.randint(3, 8)  # random size
         self.rotation = random.uniform(0, 360)
         self.rotation_speed = random.uniform(-5, 5)
         
     def update(self):
-        #upate the velocity of the cofetti when falling down
+        # move the confetti
         self.x += self.vx
         self.y += self.vy
         self.rotation += self.rotation_speed
-        #gravity
-        self.vy += 0.1
+        self.vy += 0.1  # gravity makes it fall faster
         
     def draw(self, screen):
+        # draw confetti as circle
         pygame.draw.circle(screen, self.color, (int(self.x), int(self.y)), self.size)
         
     def is_offscreen(self):
-        if self.y > HEIGHT + 20:
-            return True
-        return False
+        """Check if confetti has fallen off screen"""
+        return self.y > HEIGHT + 20
 
 #th balls
 
-#the ball itself 
+# makes a pool ball
 class Ball: 
     def __init__(self, x, y, color, is_cue=False, is_striped=False):
-        self.x = x         #Balls X Position
-        self.y = y         #Balls Y Position
-        self.vx = 0        #Velocity in X direction
-        self.vy = 0        #Velocity in Y direction
-        self.color = color  #Color of ball
-        self.is_cue = is_cue #cue ball
-        self.is_striped = is_striped #striped ball
-        self.alive = True #still in game
+        self.x = x         # where ball is (x)
+        self.y = y         # where ball is (y)
+        self.vx = 0        # how fast ball moves (x)
+        self.vy = 0        # how fast ball moves (y)
+        self.color = color  # what color
+        self.is_cue = is_cue # is it white ball
+        self.is_striped = is_striped # does it have stripe
+        self.alive = True # is ball still playing
 
-#draws the balls
+# draw balls on screen
     def draw(self, screen):
         if self.is_striped:
-            # Create a surface for the ball content (White ball + Colored Stripe)
+            # make a surface to draw the ball
             surf = pygame.Surface((ball_radius * 2, ball_radius * 2), pygame.SRCALPHA)
             
-            # 1. Draw white base circle
+            # draw white circle first
             pygame.draw.circle(surf, (255, 255, 255), (ball_radius, ball_radius), ball_radius)
             
-            # 2. Draw colored stripe (rect)
+            # draw stripe color on top
             rect_height = ball_radius * 1.2
             rect = pygame.Rect(0, ball_radius - rect_height // 2, ball_radius * 2, rect_height)
             pygame.draw.rect(surf, self.color, rect)
             
-            # 3. Create a mask surface to clip the corners of the rect
+            # make a circle mask so stripe doesnt go outside
             mask = pygame.Surface((ball_radius * 2, ball_radius * 2), pygame.SRCALPHA)
             pygame.draw.circle(mask, (255, 255, 255), (ball_radius, ball_radius), ball_radius)
             
-            # 4. Apply mask using BLEND_RGBA_MULT
-            # This keeps pixels where mask is white, and removes where mask is transparent
+            # use the mask
             surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
             
             screen.blit(surf, (int(self.x) - ball_radius, int(self.y) - ball_radius))
         else:
+            # solid balls are easier just one color
             pygame.draw.circle(screen, self.color, (int(self.x), int(self.y)), ball_radius)
 
     def move(self):
+        # move ball
         self.x += self.vx
         self.y += self.vy
         
-        # Wall collisions
-        # Check left and right boundaries
+        # check if hit walls
+        # left and right walls
         if self.x - ball_radius < left_bound:
             self.x = left_bound + ball_radius
-            self.vx *= -1
+            self.vx *= -1  # bounce
         elif self.x + ball_radius > right_bound:
             self.x = right_bound - ball_radius
-            self.vx *= -1
+            self.vx *= -1  # bounce
             
-        # Check top and bottom boundaries
+        # top and bottom walls
         if self.y - ball_radius < top_bound:
             self.y = top_bound + ball_radius
-            self.vy *= -1
+            self.vy *= -1  # bounce
         elif self.y + ball_radius > BOTTOM_BOUND:
             self.y = BOTTOM_BOUND - ball_radius
-            self.vy *= -1
+            self.vy *= -1  # bounce
 
+        # slow down ball (friction)
         self.vx *= friction
         self.vy *= friction
+        # stop if too slow
         if abs(self.vx) < min_speed:
             self.vx = 0
         if abs(self.vy) < min_speed:
             self.vy = 0
 
-#Cue
+# cue stick class
 class Cue:
     def __init__(self, ball):
-        self.ball = ball
-        self.angle = 0
-        self.power = 0
-        # Animation state
+        self.ball = ball  # which ball to hit
+        self.angle = 0  # direction
+        self.power = 0  # how hard
+        # for animation
         self.is_striking = False
         self.strike_progress = 0
-        self.max_pullback = 200
+        self.max_pullback = 200  # max distance
 
     def update(self, mouse_pos):
         if not self.is_striking:
+            # find direction from mouse to ball
             dx = self.ball.x - mouse_pos[0]
             dy = self.ball.y - mouse_pos[1]
             self.angle = math.atan2(dy, dx)
+            # find distance
             distance = math.hypot(dx, dy)
+            # calculate power
             self.power = min(distance, self.max_pullback) / self.max_pullback * 100
     
     def start_strike(self):
+        # start hitting
         if self.power > 5:
             self.is_striking = True
             self.strike_progress = 0
     
     def update_strike_animation(self):
+        # animate the cue hitting
         if self.is_striking:
-            self.strike_progress += 0.15
+            self.strike_progress += 0.15  # move forward
             if self.strike_progress >= 1.0:
                 self.is_striking = False
                 self.strike_progress = 0
-                return True
-        return False
+                return True  # done
+        return False  # not done
     
     def calculate_velocity(self):
+        # calculate how hard to hit
         force = (self.power / 100) * 15
         vx = math.cos(self.angle) * force
         vy = math.sin(self.angle) * force
         return vx, vy
 
     def draw(self, screen):
-        cue_angle = self.angle + math.pi
+        # draw the cue stick
+        cue_angle = self.angle + math.pi  # flip direction
         
+        # where to draw cue
         if self.is_striking:
             max_offset = 25 + self.power
             min_offset = 10
@@ -215,33 +223,40 @@ class Cue:
         else:
             offset = 25 + self.power
         
+        # draw stick line
         length = 250
         start_x = self.ball.x + math.cos(cue_angle) * offset
         start_y = self.ball.y + math.sin(cue_angle) * offset
         end_x = start_x + math.cos(cue_angle) * length
         end_y = start_y + math.sin(cue_angle) * length
         
+        # brown stick
         pygame.draw.line(screen, (100, 50, 0), (start_x, start_y), (end_x, end_y), 8)
         pygame.draw.line(screen, (160, 82, 45), (start_x, start_y), (end_x, end_y), 4)
         
+        # white tip
         tip_x = self.ball.x + math.cos(cue_angle) * (offset - 5)
         tip_y = self.ball.y + math.sin(cue_angle) * (offset - 5)
         pygame.draw.circle(screen, (255, 255, 255), (int(tip_x), int(tip_y)), 4)
         
+        # draw aiming line
         if not self.is_striking:
             aim_len = 100 + self.power * 3
             aim_end_x = self.ball.x + math.cos(self.angle) * aim_len
             aim_end_y = self.ball.y + math.sin(self.angle) * aim_len
             pygame.draw.line(screen, (255, 255, 255), (self.ball.x, self.ball.y), (aim_end_x, aim_end_y), 2)
             
+            # show power
             font = pygame.font.SysFont(None, 24)
             text = font.render(f"Power: {int(self.power)}%", True, (255, 255, 255))
             screen.blit(text, (self.ball.x + 20, self.ball.y + 20))
 
     def draw_prediction(self, screen, balls):
-        # simulate the actual shot using the game's physics and draw:
-        # - a line from the real cue ball to the collision point (or stop point)
-        # - a line from the struck object ball from collision to where it rolls to
+        """
+        simulate the actual shot using the game's physics and draw:
+        - a line from the real cue ball to the collision point (or stop point)
+        - a line from the struck object ball from collision to where it rolls to
+        """
         cue_ball = self.ball
         if not cue_ball.alive:
             return
@@ -333,32 +348,38 @@ class Cue:
                 obj_final_pos,
                 2
             )
+# check if balls hit each other
 def check_collisions(balls, cue_ball_in_hand=False, collision_info=None):
+    # go through all balls
     for i in range(len(balls)):
-        # If cue ball is in hand, skip checking it against other balls
+        # skip cue ball if placing it
         if cue_ball_in_hand and i == 0:
             continue
             
+        # check against other balls
         for j in range(i + 1, len(balls)):
             b1 = balls[i]
             b2 = balls[j]
             
+            # skip dead balls
             if not b1.alive or not b2.alive:
                 continue
 
+            # find distance between balls
             dx = b2.x - b1.x
             dy = b2.y - b1.y
             distance = math.hypot(dx, dy)
 
+            # if balls touching
             if distance < ball_radius * 2:
-                # Collision detected
                 
-                # track first ball hit by cue ball this turn
+                # track what ball was hit (for prediction lines)
                 if collision_info is not None and collision_info.get("first_hit") is None:
                     cue_ball = None
                     other = None
                     hit_index = None
 
+                    # find which one is cue ball
                     if b1.is_cue and not cue_ball_in_hand:
                         cue_ball = b1
                         other = b2
@@ -369,7 +390,7 @@ def check_collisions(balls, cue_ball_in_hand=False, collision_info=None):
                         hit_index = i
 
                     if cue_ball is not None and other is not None and other.alive:
-                        # what type of ball was hit first?
+                        # save what type of ball was hit
                         if other.color == black:
                             collision_info["first_hit"] = "8ball"
                         elif other.is_striped:
@@ -377,56 +398,57 @@ def check_collisions(balls, cue_ball_in_hand=False, collision_info=None):
                         else:
                             collision_info["first_hit"] = "solids"
 
-                        # extra info for prediction line
+                        # save position for prediction line
                         collision_info["hit_pos"] = (cue_ball.x, cue_ball.y)
                         collision_info["hit_ball_index"] = hit_index
                 
-                # Resolve overlap
+                # move balls apart if overlapping
                 overlap = ball_radius * 2 - distance
                 angle = math.atan2(dy, dx)
                 
-                # Move balls apart
+                # push balls away from each other
                 b1.x -= math.cos(angle) * overlap / 2
                 b1.y -= math.sin(angle) * overlap / 2
                 b2.x += math.cos(angle) * overlap / 2
                 b2.y += math.sin(angle) * overlap / 2
                 
-                # Resolve velocity (Elastic collision)
-                # Normal vector
+                # calculate new velocities (physics stuff)
+                # normal direction
                 nx = math.cos(angle)
                 ny = math.sin(angle)
                 
-                # Tangent vector
+                # tangent direction (perpendicular)
                 tx = -ny
                 ty = nx
                 
-                # Dot product tangent
+                # project velocities onto these directions
                 dpTan1 = b1.vx * tx + b1.vy * ty
                 dpTan2 = b2.vx * tx + b2.vy * ty
                 
-                # Dot product normal
                 dpNorm1 = b1.vx * nx + b1.vy * ny
                 dpNorm2 = b2.vx * nx + b2.vy * ny
                 
-                # Conservation of momentum in 1D
-                m1 = (dpNorm1 * (1 - 1) + 2 * 1 * dpNorm2) / (1 + 1) # Mass is 1
+                # swap normal components (elastic collision)
+                m1 = (dpNorm1 * (1 - 1) + 2 * 1 * dpNorm2) / (1 + 1)  # balls have same mass
                 m2 = (dpNorm2 * (1 - 1) + 2 * 1 * dpNorm1) / (1 + 1)
                 
-                # Update velocities
+                # update velocities
                 b1.vx = tx * dpTan1 + nx * m1
                 b1.vy = ty * dpTan1 + ny * m1
                 b2.vx = tx * dpTan2 + nx * m2
                 b2.vy = ty * dpTan2 + ny * m2
 
+# check if balls went in pockets
 def check_pockets(balls):
-    potted_info = []
+    potted_info = []  # list of balls that went in
     for ball in balls:
         if not ball.alive:
-            continue
+            continue  # skip if already gone
             
+        # check each pocket
         for pocket in POCKETS:
             px, py = pocket
-            dist = math.hypot(ball.x - px, ball.y - py)
+            dist = math.hypot(ball.x - px, ball.y - py)  # distance to pocket
             
             if dist < pocket_radius:
                 # Ball in pocket
@@ -704,7 +726,17 @@ def ai_place_ball(balls):
             return
 
 def check_win_condition(balls, player_group):
+    """
+    Check if the player has won the game
+    Win condition: All player's balls are pocketed AND the 8-ball is pocketed
     
+    Args:
+        balls: List of all balls in the game
+        player_group: "solids" or "stripes" - the player's assigned group
+    
+    Returns:
+        True if player has won, False otherwise
+    """
     if player_group is None:
         return False  # Can't win without an assigned group
     
@@ -731,8 +763,15 @@ def check_win_condition(balls, player_group):
     return True  # All conditions met!
 
 def show_lose_screen(screen, loser_name):
-    # display lose screen for the player who lost
+    """display lose screen for the player who lost
     
+    args:
+        screen: pygame display surface
+        loser_name: name of the player who lost
+    
+    returns:
+        string indicating next action ("menu" or "quit")
+    """
     clock = pygame.time.Clock()
     
     # lose screen loop
@@ -785,8 +824,17 @@ def show_lose_screen(screen, loser_name):
     return "MENU"
 
 def show_win_screen(screen, winner_name, confetti_particles):
-    # Display the win screen with confetti animation
+    """
+    Display the win screen with confetti animation
     
+    Args:
+        screen: Pygame screen surface
+        winner_name: Name of the winning player
+        confetti_particles: List of confetti objects to animate
+    
+    Returns:
+        String indicating next action ("MENU" or "QUIT")
+    """
     clock = pygame.time.Clock()
     
     # Try to load/play victory sound (optional)
